@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reseller Panel</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: #1a0505; color: #fff; padding: 20px; min-height: 100vh; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h2, h3 { color: #ff6b6b; margin-bottom: 15px; }
+        .card { background: rgba(255, 0, 0, 0.08); backdrop-filter: blur(12px); border: 1px solid rgba(255, 75, 75, 0.3); padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 15px 35px rgba(255, 0, 0, 0.2); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 13px; color: #ffcccc; }
+        input, select { width: 100%; padding: 10px; background: rgba(0,0,0,0.4); border: 1.5px solid rgba(255, 75, 75, 0.3); border-radius: 8px; color: #fff; outline: none; }
+        button { background: linear-gradient(135deg, #ff4b4b, #c9184a); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; box-shadow: 0 4px 15px rgba(201, 24, 74, 0.5); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid rgba(255, 75, 75, 0.2); padding: 10px; text-align: left; }
+        th { background: rgba(255, 75, 75, 0.2); color: #ff6b6b; }
+        #loginSection, #dashboardSection { display: none; }
+        .key-row { display: flex; gap: 10px; }
+        .key-row input { flex: 1; }
+        .btn-gen { background: #4361ee; width: auto; padding: 10px 15px; font-size: 12px; }
+        .notice-box { background: rgba(255, 193, 7, 0.2); border: 1px solid #ffc107; padding: 12px; border-radius: 8px; margin-bottom: 15px; color: #ffc107; display: none; font-size: 13px; position: relative; }
+        .notice-close { position: absolute; top: 10px; right: 12px; cursor: pointer; font-weight: bold; }
+        .device-info { font-size: 11px; color: #00f5d4; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- লগইন সেকশন -->
+        <div id="loginSection" class="card" style="max-width: 400px; margin: 80px auto;">
+            <h2>Reseller Login</h2>
+            <div class="form-group" style="margin-top: 15px;">
+                <label>Username</label>
+                <input type="text" id="loginUser" placeholder="Username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPass" placeholder="Password">
+            </div>
+            <button onclick="resellerLogin()">Login</button>
+        </div>
+
+        <!-- ড্যাশবোর্ড সেকশন -->
+        <div id="dashboardSection">
+            <h2>🤝 Reseller Dashboard</h2>
+            
+            <div class="notice-box" id="resellerNotice">
+                <span id="noticeText"></span>
+                <span class="notice-close" onclick="closeNotice()">✕</span>
+            </div>
+
+            <div class="card">
+                <h3>Welcome, <span id="resellerNameDisplay" style="color:#00f5d4;"></span></h3>
+                <p>Balance: <b id="balanceDisplay" style="color: #ff4b4b; font-size: 18px;">0</b> Coins</p>
+                <button onclick="logout()" style="width: auto; padding: 6px 12px; margin-top: 10px; background: #d90429;">Logout</button>
+            </div>
+
+            <div class="card">
+                <h3>Create User License Key (One Device)</h3>
+                <div class="form-group">
+                    <label>License Key</label>
+                    <div class="key-row">
+                        <input type="text" id="userKey" placeholder="e.g. USER-KEY-101">
+                        <button type="button" class="btn-gen" onclick="generateResellerKey()">Auto Generate</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Duration & Unit</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="userDuration" value="1" style="flex: 1;">
+                        <select id="userUnit" style="flex: 1;">
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                            <option value="months">Months</option>
+                            <option value="years">Years</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="createUserKey()">Generate Key (Cost: 1 Coin)</button>
+            </div>
+
+            <div class="card">
+                <h3>Keys Created By You & Login Status</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>User Login Status / Device Info</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resellerKeysList">
+                        <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBr7I0fdsCUVOubFfg0AtVcp9I-jNGTmrU",
+            databaseURL: "https://ashraf-creators-default-rtdb.firebaseio.com",
+            projectId: "ashraf-creators"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentReseller = localStorage.getItem('reseller_user');
+        if (currentReseller) { loadDashboard(currentReseller); } 
+        else { document.getElementById('loginSection').style.display = 'block'; }
+
+        function resellerLogin() {
+            let u = document.getElementById('loginUser').value.trim();
+            let p = document.getElementById('loginPass').value.trim();
+            db.ref('resellers/' + u).once('value').then(snapshot => {
+                if (!snapshot.exists()) { alert("Reseller not found!"); return; }
+                let data = snapshot.val();
+                if (data.status === 'frozen') { alert("Account frozen!"); return; }
+                if (data.password === p) {
+                    localStorage.setItem('reseller_user', u);
+                    loadDashboard(u);
+                } else { alert("Incorrect password!"); }
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('reseller_user');
+            location.reload();
+        }
+
+        function loadDashboard(uname) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('dashboardSection').style.display = 'block';
+            document.getElementById('resellerNameDisplay').innerText = uname;
+
+            db.ref('resellers/' + uname).on('value', snapshot => {
+                if(snapshot.exists()) {
+                    let d = snapshot.val();
+                    document.getElementById('balanceDisplay').innerText = d.balance;
+                    if(d.notification && d.notification.message) {
+                        let noticeEl = document.getElementById('resellerNotice');
+                        noticeEl.style.display = 'block';
+                        document.getElementById('noticeText').innerHTML = `<b>Target Notice:</b> ${d.notification.message}`;
+                    }
+                }
+            });
+
+            db.ref('broadcast_notification').on('value', snap => {
+                if(snap.exists()) {
+                    let bData = snap.val();
+                    let noticeEl = document.getElementById('resellerNotice');
+                    if(noticeEl.style.display !== 'block') {
+                        noticeEl.style.display = 'block';
+                        document.getElementById('noticeText').innerHTML = `<b>Admin Broadcast:</b> ${bData.message}`;
+                    }
+                }
+            });
+
+            db.ref('keys').on('value', snapshot => {
+                let list = document.getElementById('resellerKeysList');
+                list.innerHTML = '';
+                let found = false;
+                snapshot.forEach(child => {
+                    let kData = child.val();
+                    if (kData.created_by === uname) {
+                        found = true;
+                        
+                        let devices = kData.devices || {};
+                        let devCount = Object.keys(devices).length;
+                        let devDetails = "";
+                        for (let devId in devices) {
+                            devDetails += `<div>📱 ID: ${devId.substring(0, 10)}... (Login: ${devices[devId].login_time})</div>`;
+                        }
+                        if (devDetails === "") devDetails = "<span style='color:#ff6b6b;'>Not Logged In Yet</span>";
+                        else devDetails = `<b style="color:#00f5d4;">${devCount} Device Active</b><div class="device-info">${devDetails}</div>`;
+
+                        list.innerHTML += `<tr>
+                            <td><b>${child.key}</b></td>
+                            <td>${kData.duration} ${kData.unit}</td>
+                            <td>${kData.status.toUpperCase()}</td>
+                            <td>${devDetails}</td>
+                        </tr>`;
+                    }
+                });
+                if(!found) list.innerHTML = `<tr><td colspan="4" style="text-align: center;">No keys created.</td></tr>`;
+            });
+        }
+
+        function closeNotice() {
+            document.getElementById('resellerNotice').style.display = 'none';
+        }
+
+        function generateResellerKey() {
+            let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            let autoKey = "RES-";
+            for (let i = 0; i < 8; i++) {
+                autoKey += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('userKey').value = autoKey;
+        }
+
+        function createUserKey() {
+            let uname = localStorage.getItem('reseller_user');
+            let key = document.getElementById('userKey').value.trim();
+            let duration = parseInt(document.getElementById('userDuration').value);
+            let unit = document.getElementById('userUnit').value;
+
+            if (!key) { alert("Enter key!"); return; }
+
+            db.ref('resellers/' + uname).once('value').then(snapshot => {
+                let balance = snapshot.val().balance;
+                if (balance < 1) { alert("Insufficient balance!"); return; }
+
+                db.ref('keys/' + key).once('value').then(kSnap => {
+                    if (kSnap.exists()) { alert("Key already exists!"); return; }
+
+                    db.ref('resellers/' + uname).update({ balance: balance - 1 });
+                    db.ref('keys/' + key).set({
+                        status: "active", duration: duration, unit: unit, max_devices: 1, created_by: uname, created_at: Date.now()
+                    }).then(() => { alert("Key Created Successfully!"); document.getElementById('userKey').value = ''; });
+                });
+            });
+        }
+    </script>
+</body>
+</html>
